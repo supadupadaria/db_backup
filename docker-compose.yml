@@ -1,0 +1,70 @@
+---
+version: "3.9"
+
+services:
+    database:
+        image: postgres:14
+        container_name: database
+        ports:
+          - 5432:5432
+        restart: always
+        environment:
+            POSTGRES_PASSWORD: &pg-passwd pwdtest
+        volumes:
+          - db-data:/var/lib/postgresql/data
+        networks:
+          - net1
+    
+    adminer:
+        image: adminer
+        restart: always
+        ports:
+          - 8080:8080
+
+    s3_minio:
+        image: minio/minio
+        container_name: s3_minio
+        ports:
+          - "9000:9000"
+          - "9001:9001"
+        volumes:
+          - s3-data:/data
+        environment:
+            MINIO_ROOT_USER: &mc-user minioadmin
+            MINIO_ROOT_PASSWORD: &mc-passwd minio_passwd
+        command: server --console-address ":9001" /data
+        networks:
+          - net2
+
+    backuper:
+        image: db_backup:4
+        container_name: backuper
+        environment:
+            SCHEDULE: '*/10 * * * *'
+            PGPASSWORD: *pg-passwd
+            MINIO_ROOT_USER: *mc-user
+            MINIO_ROOT_PASSWORD: *mc-passwd
+        depends_on:
+          - database
+          - s3_minio
+        networks:
+          - net1
+          - net2
+
+networks:
+    net1:
+      driver: bridge
+      ipam:
+         config:
+            - subnet: 192.168.40.0/24
+              gateway: 192.168.40.1
+    net2:
+      driver: bridge
+      ipam:
+         config:
+            - subnet: 192.168.30.0/24
+              gateway: 192.168.30.1
+
+volumes:
+    db-data:
+    s3-data:
